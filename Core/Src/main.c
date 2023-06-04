@@ -18,10 +18,9 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "adc.h"
-#include "dma.h"
 #include "i2c.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -60,27 +59,41 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 uint32_t a;
 uint16_t ADC_Data=0;
-int ADC_Converted=0;
+int ESP_Speed=1000;
+
+uint8_t rx_buffer[100];
+uint32_t rx_IT_count = 0;
+volatile uint8_t rx_data;
 
 extern float pid_output_roll, pid_output_pitch, pid_output_yaw;
 
 float time, timePrev;
+
+void clear_buffer(char *buffer)
+{
+	memset(buffer, 0, 100);
+}
 
 long map(long x,long in_min, long in_max, long out_min, long out_max)
 {
 	return (x - in_min)*(out_max - out_min + 1)/(in_max -in_min + 1) + out_min;
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-	ADC_Converted = map(ADC_Data,0, 4095, 1000, 2000);
-	
-	TIM1->CCR1= ADC_Converted + pid_output_pitch + pid_output_roll - pid_output_yaw;
-	TIM1->CCR2= ADC_Converted - pid_output_pitch + pid_output_roll + pid_output_yaw;
-	TIM1->CCR3= ADC_Converted - pid_output_pitch - pid_output_roll - pid_output_yaw;
-	TIM1->CCR4= ADC_Converted + pid_output_pitch - pid_output_roll + pid_output_yaw;
+void Set_Speed(void)
+{	
+	TIM1->CCR1= ESP_Speed + pid_output_pitch + pid_output_roll + pid_output_yaw;
+	TIM1->CCR2= ESP_Speed + pid_output_pitch - pid_output_roll - pid_output_yaw;
+	TIM1->CCR3= ESP_Speed - pid_output_pitch - pid_output_roll + pid_output_yaw;
+	TIM1->CCR4= ESP_Speed - pid_output_pitch + pid_output_roll - pid_output_yaw;
 }
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	ESP_Speed = atoi((char *)&rx_buffer[5]);
+	clear_buffer((char *) rx_buffer);
+	HAL_UART_Receive_IT(&huart1, rx_buffer, 9);
+	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+}
 /* USER CODE END 0 */
 
 /**
@@ -111,10 +124,9 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_I2C2_Init();
-  MX_ADC1_Init();
   MX_TIM1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 	MPU6050_Init();
 	
@@ -143,8 +155,7 @@ int main(void)
 		TIM1->CCR3 = 0;
 		TIM1->CCR4 = 0;
 	#endif
-	
-	HAL_ADC_Start_DMA(&hadc1,(uint32_t *)&ADC_Data,1);
+	HAL_UART_Receive_IT(&huart1, rx_buffer, 9);
 	Calculation_Gyro_error();
 	Calculation_Acc_error();
 	
@@ -159,6 +170,7 @@ int main(void)
 		while (HAL_GetTick() - timePrev < 4); //make sure loop_time = 4ms
 		timePrev = HAL_GetTick();
 		Calculate_pid();
+		Set_Speed();
 		
     /* USER CODE END WHILE */
 
@@ -175,7 +187,6 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -202,12 +213,6 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV8;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }

@@ -35,7 +35,7 @@ float pid_i_mem_yaw, pid_yaw_setpoint, gyro_yaw_input, pid_output_yaw, pid_last_
 void Calculate_pid(){
   //Roll calculations
 	
-	gyro_roll_input = (gyro_roll_input * 0.7) + ((Gx / 65.5) * 0.3);   //Gyro pid input is deg/sec.
+	gyro_roll_input = (gyro_roll_input * 0.7) + ((Gy / 65.5) * 0.3);   //Gyro pid input is deg/sec.
 	
   pid_error_temp = gyro_roll_input - pid_roll_setpoint;
   pid_i_mem_roll += pid_i_gain_roll * pid_error_temp;
@@ -50,7 +50,7 @@ void Calculate_pid(){
 
   //Pitch calculations
 	
-	gyro_pitch_input = (gyro_pitch_input * 0.7) + ((Gy / 65.5) * 0.3);//Gyro pid input is deg/sec.
+	gyro_pitch_input = (gyro_pitch_input * 0.7) + ((Gx / 65.5) * 0.3);//Gyro pid input is deg/sec.
 	
   pid_error_temp = gyro_pitch_input - pid_pitch_setpoint;
   pid_i_mem_pitch += pid_i_gain_pitch * pid_error_temp;
